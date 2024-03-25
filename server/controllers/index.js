@@ -1,8 +1,19 @@
 // pull in our models. This will automatically load the index.js from that folder
 const models = require('../models');
+const { Cat } = models;
 
-const hostIndex = (req, res) => {
+const hostIndex = async (req, res) => {
   let name = 'unknown';
+
+  try {
+    const doc = await Cat.findOne({}).sort({'createdDate': 'descending'}).lean().exec();
+
+    if(doc) {
+      name = doc.name;
+    }
+  } catch (err) {
+    console.log(err);
+  }
 
   res.render('index', {
     currentName: name,
@@ -11,8 +22,14 @@ const hostIndex = (req, res) => {
   });
 };
 
-const hostPage1 = (req, res) => {
-
+const hostPage1 = async (req, res) => {
+  try {
+    const docs = await Cat.find({}).lean().exec();
+    return res.render('page1', {cats: docs});
+  } catch (err) {
+    console.log(err);
+    return res.render('page1');
+  }
 };
 
 const hostPage2 = (req, res) => {
@@ -23,25 +40,73 @@ const hostPage3 = (req, res) => {
   res.render('page3');
 };
 
-const getName = (req, res) => {
+const getName = async (req, res) => {
+  try {
+    const doc = await Cat.findOne({}).sort({'createdDate': 'descending'}).lean().exec();
 
+    if(!doc) {
+      return res.status(404).json({error: 'No cat found.'});
+    }
+
+    return res.json({name: doc.name});
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'Something went wrong connecting to database.'});
+  }
 };
 
-const setName = (req, res) => {
+const setName = async (req, res) => {
   if (!req.body.firstname || !req.body.lastname || !req.body.beds) {
     return res.status(400).json({ error: 'firstname, lastname and beds are all required' });
   }
   
-};
+  const catData = {
+    name: `${req.body.firstname} ${req.body.lastname}`,
+    bedsOwned: req.body.beds,
+  };
 
-const searchName = (req, res) => {
-  if (!req.query.name) {
-    return res.status(400).json({ error: 'Name is required to perform a search' });
+  const newCat = new Cat(catData);
+
+  try {
+    await newCat.save();
+    return res.status(201).json({
+      name: newCat.name,
+      beds: newCat.bedsOwned,
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'Failed to create cat.'});
   }
 };
 
-const updateLast = (req, res) => {
-	
+const searchName = async (req, res) => {
+  if (!req.query.name) {
+    return res.status(400).json({ error: 'Name is required to perform a search' });
+  }
+
+  try {
+    const doc = await Cat.findOne({name: req.query.name}).select('name bedsOwned').exec();
+
+    if (!doc){
+      return res.status(404).json({ error: `No cat found with the name ${req.query.name}.`});
+    }
+
+    return res.json({ name: doc.name, beds: doc.bedsOwned});
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'Something went wrong connecting to database.'});
+  }
+};
+
+const updateLast = async (req, res) => {
+	try {
+    const doc = await Cat.findOneAndUpdate({}, {$inc: {bedsOwned: 1}}, {returnDocument: 'after', sort: {'createdDate': 'descending'}}).lean().exec();
+
+    return res.json({name: doc.name, beds: doc.bedsOwned});
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'Something went wrong connecting to database.'});
+  }
 };
 
 const notFound = (req, res) => {
